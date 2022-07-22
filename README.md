@@ -145,7 +145,6 @@ Cada lineamiento se estructura de la siguiente manera:
 | Declaración   |  Desarrollar micro servicios con niveles de complejidad adecuados al dominio de problema que pretende atacar.                                                                              |
 | Racional      | Aplicaciones construidas con códigos demasiados complejos conducen a algoritmos dificil de interpretar y de mantener, dañando varias características deseables en el codigo fuente: modularidad, capacidad de prueba, capacidad de despliegue, etc. |
 | Implicaciones |  Desarrollar micros servicios con las siguientes complejidades ciclomática: <br>
-
 - Domino simple : 1-4 de complejidad ciclomática. <br>
 - Domino moderado: 5-10 de complejidad ciclomática. <br>
 - Domino complejo: 10-15 de complejidad ciclomática. *NOTA: En general el valor aceptado en la industria es 10. Mayor de 10 es un valor riesgoso.*<br>
