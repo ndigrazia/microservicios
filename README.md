@@ -147,7 +147,7 @@ Cada lineamiento se estructura de la siguiente manera:
 | Implicaciones |  Desarrollar micro servicios con las siguientes complejidades ciclomática: 
 - Domino simple : 1-4 de complejidad ciclomática. <br>
 - Domino moderado: 5-10 de complejidad ciclomática. <br>
-- Domino complejo: 10-15 de complejidad ciclomática. *NOTA: En general el valor aceptado en la industria es 10. Mayor de 10 es un valor riesgoso.*<br>
+- Domino complejo: 10-15 de complejidad ciclomática. *<br> NOTA: <br> - En general el valor aceptado en la industria es 10. Mayor de 10 es un valor riesgoso.<br> - Evaluar la posibilidad de descomponer la logica del servicio.*<br>
 
 ### Identificador semántico de la imagen en el repositorio de código fuente
 |               |                                                                                                                                                                                                                                                                                                                                                                   |
