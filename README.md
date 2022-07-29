@@ -1,6 +1,14 @@
-- [Micro Servicios - Prácticas y Lineamientos](#micro-servicios---prácticas-y-lineamientos)
+- [Prácticas y Lineamientos](#prácticas-y-lineamientos)
   - [Objetivo](#objetivo)
-  - [Conjunto de lineamientos](#conjunto-de-lineamientos)
+  - [Colas asincrónicas](#colas-asincrónicas)
+    - [Actualizaciones asincrónicas mediante mensajes de comandos](#actualizaciones-asincrónicas-mediante-mensajes-de-comandos)
+    - [Procesamiento idempotente](#procesamiento-idempotente)
+    - [Eliminación de mensajes basura encolados](#eliminación-de-mensajes-basura-encolados)
+    - [Definición de timeouts y de reintentos demorados](#definición-de-timeouts-y-de-reintentos-demorados)
+    - [Definición de tamaño de la cola de mensajería](#definición-de-tamaño-de-la-cola-de-mensajería)
+    - [Creación de un procesador de mensajes basura encolados](#creación-de-un-procesador-de-mensajes-basura-encolados)
+    - [Monitorización del procesamiento de mensajes asincrónicos](#monitorización-del-procesamiento-de-mensajes-asincrónicos)
+  - [Micro Servicios](#micro-servicios)
     - [Reporte de estado de salud](#reporte-de-estado-de-salud)
     - [Configuración elástica](#configuración-elástica)
     - [Reporte de métricas o telemetrías](#reporte-de-métricas-o-telemetrías)
@@ -17,11 +25,11 @@
     - [Adecuado nivel de complejidad para el dominio problema](#adecuado-nivel-de-complejidad-para-el-dominio-problema)
     - [Identificador semántico de la imagen en el repositorio de código fuente](#identificador-semántico-de-la-imagen-en-el-repositorio-de-código-fuente)
 
-# Micro Servicios - Prácticas y Lineamientos
+# Prácticas y Lineamientos
 
 ## Objetivo
 
-El objetivo del presente documento es que los usuarios/desarrolladores conozcan las prácticas y los lineamientos sobre micro servicios para que sean tenidos en cuenta durante el desarrollo de los mismos.
+El objetivo del presente documento es que los usuarios/desarrolladores conozcan las prácticas y los lineamientos para ser tenidos en cuenta durante el desarrollo.
 
 Cada lineamiento se estructura de la siguiente manera: 
 
@@ -29,7 +37,73 @@ Cada lineamiento se estructura de la siguiente manera:
  - Racional: Motivo por el cual se establece la declaración.
  - Implicaciones: Acciones para llevar a cabo la declaración.
  
-## Conjunto de lineamientos
+
+## Colas asincrónicas 
+
+### Actualizaciones asincrónicas mediante mensajes de comandos
+
+|               |                                                                                                                                                                                                                                                                                                                                                    |
+| :------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declaración   | Favorecer el envío de mensajes de comandos asincrónicos para actualizar datos. |
+| Racional      | Las aplicaciones que realizan actualizaciones sincrónicas suelen responder con invocaciones a la capa de servicio. En este enfoque todas las llamadas del servicio deben completarse antes de retornar una respuesta. Este modelo también requiere que la escalabilidad y la disponibilidad de la capa de servicio coincidan e incluso, superen a los requerimientos de la capa de presentación, que en algunos casos puede ser difícil de determinar como por ejemplo, cuando se usan servicios de terceros para resolver los pedidos. También, puede ocurrir que un servicio no sea confiable o que su procesamiento sea lento, llevando a arruinar la experiencia del usuario y a afectar negativamente la escalabilidad. El uso de colas y los mensajes que indiquen la actividad a realizar, permiten desacoplar el cliente del servicio encargado de resolver la solicitud. Esta separación lleva a que el cliente no tenga que esperar por una respuesta, garantizando tiempos de retorno (responsiveness) consistentemente rápidos.              |
+| Implicaciones |- Acordar la estructura del mensaje de comando que es enviado del emisor al receptor.<br> - Acordar la instancia de cola de mensajes a utilizar.<br> - Construir componente encargado de actualizar el dato en la base de datos (data pump).
+ |
+
+### Procesamiento idempotente
+
+|               |                                                                                                                                                                                                                                                                                                                                                    |
+| :------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declaración   | Posibilitar el procesamiento idempotente de los mensajes asincrónicos. |
+| Racional      | Los mensajes almacenados en una cola de mensajería son removidos para su posterior tratamiento. Cuando un mensaje se remueve de la cola no se elimina definitivamente (client acknowledge mode), sino que es ocultado durante un periodo de tiempo haciendo que el mensaje no esté disponible para ser procesado simultáneamente por otro servicio. Puede ocurrir, por algún motivo, que un mensaje no sea procesado totalmente, haciendo que el mismo quede disponible en la cola para continuar con su procesamiento. Cualquier mensaje que es procesado por segunda vez puede traer inconvenientes, ya que muchas de las actividades realizadas en su procesamiento no requieren ser ejecutadas nuevamente. Para resolver este problema se necesita un procesamiento idempotente. El procesamiento idempotente me garantiza que el mensaje puede procesarse varias veces y aun así conseguir el mismo resultado que se obtendría si se realizase una sola vez.             |
+| Implicaciones |- Definir una variable de conteo que permite conocer la cantidad de veces que un mensaje es tratado en la cola de mensajería (muchos servicios de mensajería disponen de una variable para esta función).<br> - Desarrollar lógica adicional para apoyar la idempotencia para mensajes con intentos repetidos de procesamiento.<br>
+ |
+
+### Eliminación de mensajes basura encolados
+
+|               |                                                                                                                                                                                                                                                                                                                                                    |
+| :------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declaración   | Propiciar la detección y la eliminación de mensajes basura dentro de la cola de mensajes asincrónicos. |
+| Racional      | Algunos mensajes no se pueden procesar correctamente debido al contenido del propio mensaje, haciendo que el mensaje retorne a la cola para otro intento de procesamiento (client acknowledge mode). Estos mensajes basuras, que permanecen en la cola, provocan reiterados procesamientos que afectan al rendimiento de la solución.
+| Implicaciones |- Se puede usar una variable de conteo que permite conocer la cantidad de veces que se intentó procesar al mensaje.<br> - Almacenar el mensaje basura detectado en otro medio (dead-letter) para luego, poder ser tratado, ya sea manual o automáticamente.<br> - Establecer, de acuerdo a las definiciones del negocio, como realizar el tratamiento de los mensajes basuras.<br>
+|
+
+### Definición de timeouts y de reintentos demorados
+
+|               |                                                                                                                                                                                                                                                                                                                                                    |
+| :------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declaración   | Aplicar timeouts y reintentos demorados en el envío de mensajes asincrónicos. |
+| Racional      | El timeout es un mecanismo que permite dejar de esperar una respuesta brindando aislamiento de fallas, haciendo que el problema en otro servicio no se convierta en nuestro problema. Generalmente, los timeouts se encuentran acompañados de reintentos. Sin embargo, volver a intentar inmediatamente una operación después de una falla tiene pocas consecuencias beneficiosas. Si la operación es parte de un flujo de trabajo crítico donde cancelar o reiniciar el proceso es costoso, es apropiado esperar más tiempo entre intentos, ya que probablemente vuelva a fallar si se vuelve a intentar de inmediato e incluso algunos tipos de fallas pueden potenciarse.             |
+| Implicaciones |- Aplicar tiempos de espera en envío de mensajes asincrónicos. <br> - Determinar la estrategia en los reintentos: Incremental, Exponencial o Aleatorización.
+|
+
+### Definición de tamaño de la cola de mensajería
+
+|               |                                                                                                                                                                                                                                                                                                                                                    |
+| :------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declaración   | Indicar la longitud máxima de una cola de mensajería. |
+| Racional      | Controlar el tamaño de las colas, evitando que crezcan indefinidamente, ayuda a mejorar el rendimiento del sistema de mensajería (broker), evita que un crecimiento de los mensajes terminen en un agotamiento de los recursos de memoria, impide el incremento en el tiempo de procesamiento de los mensajes y previene que las transacciones para resolver la solicitud queden bloqueadas esperando la disponibilidad del recurso del sistema de mensajería.             |
+| Implicaciones |- Limitar la longitud máxima de una cola a un número determinado de mensajes o a un número determinado de bytes.<br> - Establecer el comportamiento a realizar cuando la cola alcance su tamaño máximo: Descartar mensajes o enviar los mensajes a una cola dead-letter.
+|
+
+### Creación de un procesador de mensajes basura encolados
+
+|               |                                                                                                                                                                                                                                                                                                                                                    |
+| :------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declaración   | Procesar mensajes basura encolados . |
+| Racional      | Durante el procesamiento del mensaje pueden surgir errores que conducen al consumidor a no poder tratar dicho mensaje, ya que carece de la posibilidad de hacerlo. Esta situación resulta en un mensaje basura que, para poder resolver, el consumidor debe enviarlo a otra cola (Eliminación de mensajes basura encolados). La cola de mensajes, comúnmente llamada dead-letter, contiene los mensajes no tratados, los cuales deben ser procesados, ya que de lo contrario se acumularan hasta alcanzar el límite máximo de la cola (Definir el tamaño de la cola de mensajería). Un procesador de mensajes basura asociado a la cola dead-letter debe reparar o almacenar los mensajes. En el caso que el procesador, mediante programación sin intervención humana, pueda reparar el mensaje original, lo envía de vuelta a su cola de origen. Finamente, cuando el mensaje no puede ser reparado, se le informa al humano para que se haga cargo del caso, reparándolo manualmente y reenviándolo a la cola original.             |
+| Implicaciones |- Desarrollar lógica adicional para un procesador de mensajes basura que intente averiguar porque no se pueden procesar los mensajes. Para ello debe analizar si el error es estático y determinista o, mediante el uso de algoritmos de machine learning, examinar la anomalía en los datos.<br>- Definir la lógica para reparar el mensaje.<br>- Establecer, de acuerdo a las definiciones del negocio, como tratar aquellos mensajes que no fueron reparados.
+|
+
+### Monitorización del procesamiento de mensajes asincrónicos
+
+|               |                                                                                                                                                                                                                                                                                                                                                    |
+| :------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declaración   | Monitorizar el procesamiento de mensajes asincrónicos y actuar en consecuencia. |
+| Racional      | Observar la utilización de la cola es fundamental para comprender la carga de trabajo y el estado del sistema. Las métricas como la cantidad de mensajes pendientes, la cantidad de consumidores y la tasa de consumo permiten que el sistema pueda diagnosticarse y repararse, ajustando la cantidad de consumidores o estrangulando al productor.             |
+| Implicaciones |- Establecer la lógica o la estrategia de monitoreo del consumo de los mensajes en la cola de mensajería.<br>- Definir la lógica para reaccionar y adecuar el procesamiento de los mensajes a las necesidades del negocio. Si durante el análisis se determina que el rendimiento de los consumidores no es suficiente, incrementar el número de los mismos o viceversa. En el caso de no ser posible el uso de más consumidores (debido al costo que esto supone), ralentizar los productores via una señal hasta que el consumidor pueda ponerse al día (back pressure).
+|
+
+## Micro Servicios 
 
 
 ### Reporte de estado de salud
