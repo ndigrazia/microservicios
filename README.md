@@ -29,7 +29,7 @@
 
 ## Objetivo
 
-El objetivo del presente documento es que los usuarios/desarrolladores conozcan las prácticas y los lineamientos para ser tenidos en cuenta durante el desarrollo.
+El objetivo del presente documento es que los usuarios/desarrolladores conozcan las prácticas y los lineamientos a ser tenidos en cuenta durante el desarrollo.
 
 Cada lineamiento se estructura de la siguiente manera: 
 
